@@ -3,7 +3,7 @@ import pandas as pd
 from google.cloud import storage
 import io
 import zipfile
-
+import requests
 def load_csv_from_gcs(bucket_name: str, file_path: str, file_size: int) -> pd.DataFrame:
     """
     Load a zipped CSV file from a public Google Cloud Storage bucket directly into a Pandas DataFrame.
@@ -45,7 +45,7 @@ def load_csv_from_gcs(bucket_name: str, file_path: str, file_size: int) -> pd.Da
             # Assuming there is only one CSV file in the zip, extract the first file
             csv_filename = zf.namelist()[0] 
             with zf.open(csv_filename) as csv_file:
-                df = pd.read_csv(csv_file)  # Read the CSV file directly into a DataFrame
+                df = pd.read_csv(csv_file, chunksize=100_000)  # Read the CSV file directly into a DataFrame
 
         return df
 
@@ -57,26 +57,65 @@ def load_csv_from_gcs(bucket_name: str, file_path: str, file_size: int) -> pd.Da
 def load_main_dataframe():
     if "main_data_frame" not in st.session_state:
         file_size_mb = 247.9
-
         file_size = int(file_size_mb * (1024 * 1024))
-        df = load_csv_from_gcs("soc-util-perf-data", "exp_soc_util_perf_data.csv.zip", file_size)
+        
+        # Set the chunk size for processing the CSV in smaller pieces
+        chunksize = 100_000
+        
+        # Create an empty list to store processed chunks
+        filtered_chunks = []
 
-        df = df[df['vm'] != "Random Dictator"]
-        df = df[df['vm'] != "Proportional Borda"]
+        # Step 1: Download the ZIP file and extract the specific file
+        url = 'https://storage.googleapis.com/soc-util-perf-data/exp_soc_util_perf_data.csv.zip'
+        response = requests.get(url)
+        
+        st.write(f"Downloaded {len(response.content) / 1024 / 1024:.2f} MB")  # Debugging statement
+        # Open the ZIP file from the in-memory response
+        with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+            # List all files in the ZIP
+            file_names = z.namelist()
+            print(f"Files in ZIP: {file_names}")  # Debugging statement
+            
+            # Extract only the CSV file we want
+            target_file = 'exp_soc_util_perf_data.csv'
+            
+            if target_file not in file_names:
+                raise ValueError(f"File {target_file} not found in ZIP. Available files: {file_names}")
+            
+            with z.open(target_file) as csvfile:
+                # Step 2: Read and process CSV in chunks
+                for chunk in pd.read_csv(csvfile, chunksize=chunksize):
+                    # Filter out "Random Dictator" and "Proportional Borda"
+                    chunk = chunk[chunk['vm'] != "Random Dictator"]
+                    chunk = chunk[chunk['vm'] != "Proportional Borda"]
 
-        if "Unnamed: 0" in df.columns:
-            df.drop("Unnamed: 0", axis=1, inplace=True)
+                    # Drop Unnamed: 0 if it exists in this chunk
+                    if "Unnamed: 0" in chunk.columns:
+                        chunk.drop("Unnamed: 0", axis=1, inplace=True)
 
-        df['vm'] = df['vm'].replace('PluralityWRunoff PUT', 'Plurality with Runoff')
-        df['vm'] = df['vm'].replace('Blacks', "Black's")
-        df['vm'] = df['vm'].replace('Bottom-Two-Runoff Instant Runoff', 'Bottom-Two-Runoff IRV')
-        df['vm'] = df['vm'].replace('Tideman Alternative Top Cycle', 'Tideman Alternative Smith')
+                    # Rename 'vm' values
+                    chunk['vm'] = chunk['vm'].replace({
+                        'PluralityWRunoff PUT': 'Plurality with Runoff',
+                        'Blacks': "Black's",
+                        'Bottom-Two-Runoff Instant Runoff': 'Bottom-Two-Runoff IRV',
+                        'Tideman Alternative Top Cycle': 'Tideman Alternative Smith'
+                    })
 
+                    # Store the processed chunk
+                    filtered_chunks.append(chunk)
+        
+        # Concatenate all filtered chunks into one DataFrame
+        df = pd.concat(filtered_chunks, ignore_index=True)
+
+        # Store the DataFrame in session state to avoid reloading
         st.session_state['main_data_frame'] = df
     else: 
         df = st.session_state['main_data_frame']
 
+    # Extract unique voting methods
     all_voting_methods = sorted(df['vm'].unique())
+    
+    # Create two subsets for polarized and unpolarized data
     polarized_df = df[df['num_dims_polarized'] != 0]
     unpolarized_df = df[df['num_dims_polarized'] == 0]
 

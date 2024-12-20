@@ -284,7 +284,7 @@ st.title("Expected Social Utility Performance of Voting Methods")
 
 polarized_df, unpolarized_df, all_voting_methods = load_main_dataframe()
 
-condorcet_eff_df = load_condorcet_efficiency_data("./data/condorcet_efficiency_data.csv")
+condorcet_eff_df = load_condorcet_efficiency_data("./data/condorcet_efficiency_data.csv.zip")
 
 print(all_voting_methods)
 
@@ -503,7 +503,6 @@ if (not avg_all and len(avg_types) == 0 and not show_all_options) or  filtered_d
 
 else: 
     num_simulations = int(len(filtered_df) / len(filtered_df['vm'].unique()))
-
     if num_simulations > 1:
         tab1, tab2 = st.tabs(["Average Expected Social Utility Performance", "Data"])
     else:
