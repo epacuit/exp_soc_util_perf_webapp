@@ -1,1 +1,1 @@
-web: sh setup.sh && streamlit run vm-tutorial.py
+web: sh setup.sh && streamlit run Expected_Social_Utility_Performance.py

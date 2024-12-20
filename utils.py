@@ -113,5 +113,17 @@ def load_uncertainty_dataframe():
 @st.cache_resource(show_spinner="Loading Condorcet efficiency and absolute utility data...")
 def load_condorcet_efficiency_data(filename):
 
+    if filename.endswith('.zip'):
+        with zipfile.ZipFile(filename, 'r') as zip_ref:
+            # Get list of files in the zip, filtering for CSV files
+            csv_files = [f for f in zip_ref.namelist() if f.endswith('.csv')]
+            if not csv_files:
+                raise ValueError("No CSV files found in the ZIP archive.")
+            
+            # Extract and load the first CSV file
+            with zip_ref.open(csv_files[0]) as file:
+                df = pd.read_csv(file)
+    else:
+        df = pd.read_csv(filename)
 
-    return pd.read_csv(filename)
+    return df
