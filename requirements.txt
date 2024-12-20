@@ -7,3 +7,4 @@ altair
 numpy
 seaborn
 matplotlib
+google-cloud-storage
