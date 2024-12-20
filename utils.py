@@ -60,7 +60,7 @@ def load_main_dataframe():
         file_size = int(file_size_mb * (1024 * 1024))
         
         # Set the chunk size for processing the CSV in smaller pieces
-        chunksize = 100_000
+        chunksize = 10_000
         
         # Create an empty list to store processed chunks
         filtered_chunks = []
