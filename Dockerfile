@@ -16,6 +16,3 @@ COPY . .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-
-# Command to start the application
-CMD ["streamlit", "run", "Expected_Social_Utility_Performance.py"]
