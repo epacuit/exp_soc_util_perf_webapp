@@ -529,9 +529,9 @@ else:
 
         if no_uncertainty and show_absolute_util_stats:
             abs_util_stats_str = "**Absolute Utility Statistics**\n\n\n" 
-            abs_util_stats_str += f"Expected maximum utility: **{round(filtered_condorcet_eff_df['mean_max_util_of_cand'].mean(), 3)}**.\n\n\n" 
-            abs_util_stats_str += f"Expected average utility: **{round(filtered_condorcet_eff_df['mean_avg_util_of_cand'].mean(), 3)}**.\n\n\n" 
-            abs_util_stats_str += f"Expected minimum utility: **{round(filtered_condorcet_eff_df['mean_min_util_of_cand'].mean(), 3)}**.\n\n\n" 
+            abs_util_stats_str += f"Expected maximum social utility of a candidate: **{round(filtered_condorcet_eff_df['mean_max_util_of_cand'].mean(), 3)}**.\n\n\n" 
+            abs_util_stats_str += f"Expected average social utility of all candidates: **{round(filtered_condorcet_eff_df['mean_avg_util_of_cand'].mean(), 3)}**.\n\n\n" 
+            abs_util_stats_str += f"Expected minimum social utility of a candidate: **{round(filtered_condorcet_eff_df['mean_min_util_of_cand'].mean(), 3)}**.\n\n\n" 
             st.info(abs_util_stats_str)
 
         if num_simulations > 1: 
