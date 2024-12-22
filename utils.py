@@ -126,18 +126,51 @@ def load_uncertainty_dataframe():
     if "uncertainty_data_frame" not in st.session_state:
 
         file_size_mb = 182.1
+        # Create an empty list to store processed chunks
+        filtered_chunks = []
+        chunksize = 10_000
 
-        # Convert MB to bytes
-        file_size = int(file_size_mb * (1024 * 1024))
-        df = load_csv_from_gcs("soc-util-perf-data", "exp_soc_util_perf_data_uncertainty.csv.zip", file_size)
+        url = 'https://storage.googleapis.com/soc-util-perf-data/exp_soc_util_perf_data_uncertainty.csv.zip'
+        response = requests.get(url)
+        
+        #st.write(f"Downloaded {len(response.content) / 1024 / 1024:.2f} MB")  # Debugging statement
 
-        if "Unnamed: 0" in df.columns:
-            df.drop("Unnamed: 0", axis=1, inplace=True)
+            
+        # Open the ZIP file from the in-memory response
+        with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+            # List all files in the ZIP
+            file_names = z.namelist()
+            print(f"Files in ZIP: {file_names}")  # Debugging statement
 
-        df['vm'] = df['vm'].replace('PluralityWRunoff PUT', 'Plurality with Runoff')
-        df['vm'] = df['vm'].replace('Blacks', "Black's")
-        df['vm'] = df['vm'].replace('Bottom-Two-Runoff Instant Runoff', 'Bottom-Two-Runoff IRV')
-        df['vm'] = df['vm'].replace('Tideman Alternative Top Cycle', 'Tideman Alternative Smith')
+            csv_files = [f for f in z.namelist() if not f.startswith('__MACOSX/') and not f.startswith('._')]
+            if len(csv_files) != 1:
+                raise ValueError(f"Expected one file in ZIP, but found {csv_files}")
+            
+            with z.open(csv_files[0]) as csvfile:
+                # Step 2: Read and process CSV in chunks
+                for chunk in pd.read_csv(csvfile, chunksize=chunksize):
+                    # Filter out "Random Dictator" and "Proportional Borda"
+                    chunk = chunk[chunk['vm'] != "Random Dictator"]
+                    chunk = chunk[chunk['vm'] != "Proportional Borda"]
+
+                    # Drop Unnamed: 0 if it exists in this chunk
+                    if "Unnamed: 0" in chunk.columns:
+                        chunk.drop("Unnamed: 0", axis=1, inplace=True)
+
+                    # Rename 'vm' values
+                    chunk['vm'] = chunk['vm'].replace({
+                        'PluralityWRunoff PUT': 'Plurality with Runoff',
+                        'Blacks': "Black's",
+                        'Bottom-Two-Runoff Instant Runoff': 'Bottom-Two-Runoff IRV',
+                        'Tideman Alternative Top Cycle': 'Tideman Alternative Smith'
+                    })
+
+                    # Store the processed chunk
+                    filtered_chunks.append(chunk)
+        
+        # Concatenate all filtered chunks into one DataFrame
+        df = pd.concat(filtered_chunks, ignore_index=True)
+
 
         st.session_state['uncertainty_data_frame'] = df
     else: 
