@@ -493,28 +493,22 @@ else:
         st.session_state.select_all_flag = False
 
     # Add button to select all
+
     col1, col2 = st.columns([3, 1])
-    with col1:
-        # Check if we should select all
-        default_selection = remaining_vms if st.session_state.select_all_flag else []
-        
-        vm2s = st.multiselect(
-            "Select voting methods to compare:",
-            remaining_vms,
-            default=default_selection,
-            key="method2"
-        )
-        
-        # Reset flag after using it
-        if st.session_state.select_all_flag:
-            st.session_state.select_all_flag = False
-            
+
     with col2:
         st.write("")  # Spacing
         st.write("")  # Spacing
         if st.button("Select All", type="secondary"):
-            st.session_state.select_all_flag = True
+            st.session_state.method2 = remaining_vms
             st.rerun()
+
+    with col1:
+        vm2s = st.multiselect(
+            "Select voting methods to compare:",
+            remaining_vms,
+            key="method2"
+        )
 
     vm1_df = filtered_df[filtered_df['vm'] == vm1]
 
