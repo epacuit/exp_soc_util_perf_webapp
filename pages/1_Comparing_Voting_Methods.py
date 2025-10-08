@@ -337,15 +337,15 @@ with st.sidebar:
         prob_centrist_voters_range =  select_prob_centrist_voters(election_type)
         key_values_for_polarized_elections['prob_centrist_voters'] = prob_centrist_voters_range
     
-    st.subheader("Voting Methods")
+    # st.subheader("Voting Methods")
 
-    select_all_vms = st.checkbox("Show all voting methods")
-    if not select_all_vms:
-        selected_vms = st.multiselect(
-            'Select Voting Methods', 
-            options=st.session_state["all_voting_methods"],
-            default=st.session_state["default_vm_list"],
-            disabled=select_all_vms)
+    select_all_vms = True #st.checkbox("Show all voting methods")
+    # if not select_all_vms:
+    #     selected_vms = st.multiselect(
+    #         'Select Voting Methods', 
+    #         options=st.session_state["all_voting_methods"],
+    #         default=st.session_state["default_vm_list"],
+    #         disabled=select_all_vms)
 
     st.subheader("Modifications")
 
@@ -426,8 +426,8 @@ with st.sidebar:
             filtered_df = filtered_unpolarized_df
         elif election_type == "Both":
             filtered_df = pd.concat([filtered_polarized_df, filtered_unpolarized_df], ignore_index=True)
-        if not select_all_vms:
-            filtered_df = filtered_df[filtered_df['vm'].isin(selected_vms)]
+        # if not select_all_vms:
+        #     filtered_df = filtered_df[filtered_df['vm'].isin(selected_vms)]
 
     elif not avg_all and (len(avg_types) > 0 or show_all_options):
         if election_type == "Polarized":
@@ -440,9 +440,28 @@ with st.sidebar:
                 filter_unpolarized_df(filtered_unpolarized_df, key_values_for_unpolarized_elections)], 
                 ignore_index=True)
 
-        if not select_all_vms:
-            filtered_df = filtered_df[filtered_df['vm'].isin(selected_vms)]
+        # if not select_all_vms:
+        #     filtered_df = filtered_df[filtered_df['vm'].isin(selected_vms)]
 
+
+def calculate_z_p(alpha, m):
+    """
+    Calculate z_p where p = 1 - alpha/m
+    
+    Parameters:
+    alpha: significance level (e.g., 0.05)
+    m: number of comparisons (e.g., 1260)
+    
+    Returns:
+    z_p: the upper p-quantile of the standard normal distribution
+    """
+    p = 1 - alpha/m
+    z_p = stats.norm.ppf(p)
+    return z_p
+
+
+def calculate_mcse(vm1_est_std_errors, vm2_est_std_errors, n):
+    return np.sqrt(np.sum(np.square(vm1_est_std_errors + vm2_est_std_errors)) / n**2)
 
 if (not avg_all and len(avg_types) == 0 and not show_all_options) or filtered_df.empty: 
     if ((len(key_values_for_unpolarized_elections['num_dims']) == 1 and len(key_values_for_unpolarized_elections['voter_utility']) == 1) and (key_values_for_unpolarized_elections['num_dims'][0] == 1 and  key_values_for_unpolarized_elections['voter_utility'][0] == 'Matthews')):
@@ -451,59 +470,153 @@ if (not avg_all and len(avg_types) == 0 and not show_all_options) or filtered_df
         st.warning(f'Please select at least one value for each parameter.', icon="⚠️")
 
 else:
-    vms = filtered_df['vm'].unique()
 
+    vms = filtered_df['vm'].unique()
+    #st.write(f"Number of voting methods: **{len(vms)}**")
+    sig_level = 0.05
+    num_comparisons = (len(vms) - 1) * (len(vms) - 2) 
+    #st.write(f"Number of comparisons: **{num_comparisons}**")
+    z_p = calculate_z_p(sig_level, num_comparisons)
+
+    # Create selectbox for vm1
     vm1 = st.selectbox(
-        label="Choose a Voting Method", 
-        options=sorted(vms), 
-        key="vm1", 
-        index=0)    
+        "Select a voting method:",
+        sorted(vms),
+        key="method1"
+    )
+
+    # Remove the first selection from options for the second selectbox
+    remaining_vms = sorted([m for m in vms if m != vm1])
+
+    # Initialize session state for select all
+    if 'select_all_flag' not in st.session_state:
+        st.session_state.select_all_flag = False
+
+    # Add button to select all
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        # Check if we should select all
+        default_selection = remaining_vms if st.session_state.select_all_flag else []
+        
+        vm2s = st.multiselect(
+            "Select voting methods to compare:",
+            remaining_vms,
+            default=default_selection,
+            key="method2"
+        )
+        
+        # Reset flag after using it
+        if st.session_state.select_all_flag:
+            st.session_state.select_all_flag = False
+            
+    with col2:
+        st.write("")  # Spacing
+        st.write("")  # Spacing
+        if st.button("Select All", type="secondary"):
+            st.session_state.select_all_flag = True
+            st.rerun()
 
     vm1_df = filtered_df[filtered_df['vm'] == vm1]
-    fontsize = 18
-    for vm2 in sorted(vms):
-        if vm2 != vm1:
-            st.subheader(f"{vm1} vs. {vm2}")
-            vm2_df = filtered_df[filtered_df['vm'] == vm2]
-            diff = vm1_df['exp_soc_util_perf'].values - vm2_df['exp_soc_util_perf'].values
 
-            # Create the figure with two subplots
-            fig, axes = plt.subplots(1, 2, figsize=(15, 5))
+    if len(vm2s) == 0:
+        st.warning(f'Please select at least one voting method to compare against {vm1}.', icon="⚠️")
+        st.stop()
 
-            # Combine the data for box plot
-            combined_df = pd.concat([vm1_df, vm2_df])
-                
-            # Create a new column to indicate the voting method
-            combined_df['Voting Method'] = combined_df['vm']
+    # Collect data
+    table_data = {
+        "Method 2": [],
+        "Difference": [],
+        "MCSE": [],
+        "Significant": [],
+        "Better Method": [],
+    }
 
-            # Box plot of exp_soc_util_perf for vm1 and vm2
-            sns.boxplot(x='exp_soc_util_perf', y='Voting Method', data=combined_df, ax=axes[0])
-            axes[0].set_title(f' ', fontsize=fontsize)
-            axes[0].set_xlabel('Expected Social Utility Performance', fontsize=fontsize)
-            axes[0].set_ylabel(' ', fontsize=fontsize)
-            axes[0].tick_params(axis='x', labelsize=fontsize)
-            axes[0].tick_params(axis='y', labelsize=fontsize)
+    for vm2 in vm2s:
+        vm2_df = filtered_df[filtered_df['vm'] == vm2]
+        diff = np.mean(vm1_df['exp_soc_util_perf'].values) - np.mean(vm2_df['exp_soc_util_perf'].values)
+        mcse = calculate_mcse(vm1_df['est_std_error'].values, vm2_df['est_std_error'].values, len(vm1_df))
+        is_significant = abs(diff) > z_p * mcse
+        
+        table_data["Method 2"].append(vm2)
+        table_data["Difference"].append(diff)
+        table_data["MCSE"].append(mcse)
+        # Store as string instead of boolean to avoid checkbox rendering
+        table_data["Significant"].append("✔" if is_significant else "✖")
+        table_data["Better Method"].append(vm1 if diff > 0 else vm2)
 
-            # Calculate the histograms as percentages
-            hist, bin_edges = np.histogram(diff, bins=30)
-            hist_perc = hist / len(diff) * 100
+    # Create DataFrame and sort by difference (largest to smallest)
+    df_table = pd.DataFrame(table_data)
+    df_table = df_table.sort_values('Difference', ascending=False)
 
-            # Plot the histogram
-            for i in range(len(hist_perc)):
-                if bin_edges[i] < 0:
-                    axes[1].bar(bin_edges[i], hist_perc[i], width=bin_edges[i+1]-bin_edges[i], color='red', align='edge')
-                elif bin_edges[i] > 0:
-                    axes[1].bar(bin_edges[i], hist_perc[i], width=bin_edges[i+1]-bin_edges[i], color='blue', align='edge')
-                else:
-                    axes[1].bar(bin_edges[i], hist_perc[i], width=bin_edges[i+1]-bin_edges[i], color='gray', align='edge')
+    # Style the dataframe
+    def style_table(row):
+        """Apply color styling based on difference value"""
+        diff = row["Difference"]
+        is_significant = row["Significant"] == "✔"  # Check against the string now
+        
+        if diff > 0:
+            # Method 1 is better - green tones
+            color = '#d4edda' if is_significant else '#f0f8f0'
+            text_color = '#155724' if is_significant else '#3d6e3d'
+        else:
+            # Method 2 is better - red tones  
+            color = '#f8d7da' if is_significant else '#fff5f5'
+            text_color = '#721c24' if is_significant else '#6e3d3d'
+        
+        return [f'background-color: {color}; color: {text_color}'] * len(row)
 
-            axes[1].set_title(f' ', fontsize=fontsize)
-            axes[1].set_xlabel('Difference in Expected Social Utility Performance', fontsize=fontsize)
-            axes[1].set_ylabel('Percentage', fontsize=fontsize)
-            axes[1].tick_params(axis='x', labelsize=fontsize)
-            axes[1].tick_params(axis='y', labelsize=fontsize)
+    # Format the numeric columns
+    styled_df = df_table.style.apply(style_table, axis=1)
+    styled_df = styled_df.format({
+        "Difference": "{:+.7f}",
+        "MCSE": "{:.7f}",
+        # No need to format "Significant" since it's already a string
+    })
 
-            sns.despine()
-            st.pyplot(plt)
-            plt.close()
+    # Apply text alignment using set_properties
+    styled_df = styled_df.set_properties(**{'text-align': 'center'}, subset=['Difference', 'MCSE', 'Significant'])
+    styled_df = styled_df.set_properties(**{'text-align': 'left'}, subset=['Method 2', 'Better Method'])
 
+    # Also set table styles for headers and widths
+    styled_df = styled_df.set_table_styles([
+        {'selector': 'th', 'props': [('text-align', 'center')]},  # Center all headers first
+        {'selector': 'th:nth-child(1)', 'props': [('text-align', 'left')]},  # Then left-align first header
+        {'selector': 'th:nth-child(5)', 'props': [('text-align', 'left')]},  # And last header
+        {'selector': 'td:nth-child(1)', 'props': [('min-width', '150px')]},
+        {'selector': 'td:nth-child(2)', 'props': [('width', '120px')]},
+        {'selector': 'td:nth-child(3)', 'props': [('width', '120px')]},
+        {'selector': 'td:nth-child(4)', 'props': [('width', '100px')]},
+        {'selector': 'td:nth-child(5)', 'props': [('min-width', '150px')]},
+    ])
+
+    st.write("### Differences in Expected Social Utility Performance")
+    st.write(f"**Comparing {vm1} (Method 1) against {len(vm2s)} voting methods**")
+
+    # Statistical information box
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("# Probability Models", f"{len(vm1_df)}")
+    with col2:
+        st.metric("Comparisons", f"{len(vm2s)} of {len(vms)-1}")
+    with col3:
+        st.metric("Critical z-value", f"{z_p:.3f}")
+    with col4:
+        st.metric("Significance Level", f"{sig_level:.0%}")
+
+    st.caption(f"**Difference** = Method 1 ({vm1}) minus Method 2 performance. Positive values favor Method 1.")
+    st.write("🟢 **Green** = Method 1 performs better | 🔴 **Red** = Method 2 performs better | **Darker shade** = Statistically significant")
+
+    # Display with increased height
+    st.dataframe(styled_df, hide_index=True, use_container_width=True, height=500)
+
+    # Optional: Summary statistics
+    if len(df_table) > 0:
+        sig_count = (df_table['Significant'] == "✔").sum()
+        vm1_wins = ((df_table['Difference'] > 0) & (df_table['Significant'] == "✔")).sum()
+        vm2_wins = ((df_table['Difference'] < 0) & (df_table['Significant'] == "✔")).sum()
+        
+        st.write("---")
+        st.write("**Summary:**")
+        st.write(f"• Significant differences: **{sig_count}/{len(df_table)}**")
+        st.write(f"• {vm1} significantly better: **{vm1_wins}**")
+        st.write(f"• Others significantly better: **{vm2_wins}**")
