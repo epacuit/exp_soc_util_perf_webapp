@@ -545,41 +545,19 @@ else:
                 graph_title = "Expected Social Utility Performance of Voting Methods, Averaging over Parameters, with Uncertainty"
             else:
                 graph_title = "Expected Social Utility Performance of Voting Methods, Averaging over Parameters"
-            
-            # Calculate mean and MCSE for each voting method
-            df_grouped = filtered_df.groupby('vm').agg({
-                'exp_soc_util_perf': 'mean',
-                'est_std_error': lambda x: np.sqrt(np.sum(np.square(x))) / len(x)  # MCSE calculation
-            }).reset_index()
-            
-            # Rename the MCSE column for clarity
-            df_grouped.columns = ['vm', 'exp_soc_util_perf', 'mcse']
-            
-            # Calculate 95% confidence interval bounds (1.96 * MCSE)
-            df_grouped['lower'] = df_grouped['exp_soc_util_perf'] - 1.96 * df_grouped['mcse']
-            df_grouped['upper'] = df_grouped['exp_soc_util_perf'] + 1.96 * df_grouped['mcse']
+            df_grouped = filtered_df.groupby('vm')['exp_soc_util_perf'].mean().reset_index()
 
-            min_x_val = min(df_grouped['lower'].min(), 0)
-            
-            # Determine sort parameter
-            if vm_order == 'alphabetically':
-                y_sort = alt.EncodingSortField(field='vm', order='ascending')
-            else:  # by value
-                y_sort = alt.EncodingSortField(field='exp_soc_util_perf', order='descending')
-            
-            # Create bars
+            min_x_val = min(df_grouped['exp_soc_util_perf'].min(), 0)
             bars_avg = (
                 alt.Chart(data=df_grouped)
                     .mark_bar()
                         .encode(
-                            alt.Y('vm:N', sort=y_sort, title=''),
-                            alt.X('exp_soc_util_perf:Q', title=' ', scale=alt.Scale(domain=[min_x_val, 1])),
-                            color=alt.Color('exp_soc_util_perf:Q', scale=alt.Scale(scheme='redyellowgreen', domain=[0.3, 1]), legend=None),
+                            alt.Y('vm:N', sort=alt.EncodingSortField(field="vm" if vm_order == "alphabetically" else "exp_soc_util_perf", op="sum", order='ascending'  if vm_order == "alphabetically" else 'descending')).title(''),
+                            alt.X('exp_soc_util_perf:Q').title(' ').scale(alt.Scale(domain=[min_x_val, 1])),
+                            color=alt.Color('exp_soc_util_perf:Q', scale=alt.Scale(scheme='redyellowgreen', domain=[0.3, 1]), legend=None),  # Color based on x-values
+
                             tooltip=[alt.Tooltip('vm:N', title="Voting Method"),
-                                    alt.Tooltip('exp_soc_util_perf:Q', format=".7f", title="Expected Social Utility Performance"),
-                                    alt.Tooltip('mcse:Q', format=".7f", title="MCSE"),
-                                    alt.Tooltip('lower:Q', format=".7f", title="Lower Bound"),
-                                    alt.Tooltip('upper:Q', format=".7f", title="Upper Bound")],
+                            alt.Tooltip('exp_soc_util_perf:Q', format=".4f", title="Overall Average")],
                         )
                         .properties(
                             title=graph_title,
@@ -588,42 +566,35 @@ else:
                         )
                         )
             
-            # Create error bars - thin horizontal lines showing confidence intervals
-            error_bars_avg = alt.Chart(df_grouped).mark_errorbar(ticks=False).encode(
-                alt.Y('vm:N', sort=y_sort, title=''),
-                x='lower:Q',
-                x2='upper:Q'
-            )
-            
             if show_condorcet:
                 text = alt.Chart(data=df_grouped).mark_text(
                     align='left',
                     baseline='middle',
-                    dx=3,
+                    dx=3,  # Nudges text to right so it doesn't appear on top of the bar
                     color='white'
                 ).encode(
-                    alt.Y('vm:N', sort=y_sort, title=''),
+                    alt.Y('vm:N', sort=alt.EncodingSortField(field="vm" if vm_order == "alphabetically" else "exp_soc_util_perf", op="sum", order='ascending'  if vm_order == "alphabetically" else 'descending')).title(''),
                     x=alt.value(0),
                     text=alt.condition(
-                        alt.FieldOneOfPredicate(field='vm', oneOf=condorcet_vm_names),
-                        alt.value('Condorcet'),
-                        alt.value('')
+                        alt.FieldOneOfPredicate(field='vm', oneOf=condorcet_vm_names),  # Check if 'vm' is in the predefined list
+                        alt.value('Condorcet'),  # display 'Condorcet' if condition is true
+                        alt.value('')  # do not display text if condition is false
                     )
                 )
-                # Layer with error bars ON TOP so they're visible
-                combined_chart = alt.layer(bars_avg, text, error_bars_avg).configure_axis(
-                        labelLimit=500
-                    ).configure_axisY(
-                        labelFontSize=16
+                #combined_chart = alt.layer(bars_avg, text)
+                combined_chart = (bars_avg + text).configure_axis(
+                        labelLimit=500  # Increase label limit to allow wider labels
+                    ).configure_axisY(  # Apply configuration to Y-axis
+                        labelFontSize=16  # Set label font size
                     )
+
 
                 st.altair_chart(combined_chart, use_container_width=False)
             else: 
-                # Layer with error bars ON TOP so they're visible
-                combined_chart = alt.layer(bars_avg, error_bars_avg).configure_axis(
-                        labelLimit=500
-                    ).configure_axisY(
-                        labelFontSize=16
+                combined_chart = (bars_avg).configure_axis(
+                        labelLimit=500  # Increase label limit to allow wider labels
+                    ).configure_axisY(  # Apply configuration to Y-axis
+                        labelFontSize=16  # Set label font size
                     )
 
                 st.altair_chart(combined_chart, use_container_width=False)
@@ -670,9 +641,9 @@ else:
                     title=''),
                 alt.X('exp_soc_util_perf:Q', title=' ', scale=alt.Scale(domain=[min_x_val, 1])),
                 tooltip=[alt.Tooltip('vm:N', title="Voting Method"),
-                        alt.Tooltip('exp_soc_util_perf:Q', format=".7f", title="Expected Social Utility Performance"),
-                        alt.Tooltip('lower:Q', format=".7f", title="Lower Bound"),
-                        alt.Tooltip('upper:Q', format=".7f", title="Upper Bound")],
+                        alt.Tooltip('exp_soc_util_perf:Q', format=".4f", title="Expected Social Utility Performance"),
+                        alt.Tooltip('lower:Q', format=".4f", title="Lower Bound"),
+                        alt.Tooltip('upper:Q', format=".4f", title="Upper Bound")],
                 color=alt.condition(alt.datum.has_max_exp_soc_util_perf, alt.value("orange"), alt.value("steelblue"))
             ).properties(
                 title=graph_title,
@@ -746,3 +717,4 @@ else:
                 st.write(filtered_condorcet_eff_df)
             else:
                 st.warning(f"The filtered dataframe for the Condorcet winner and absolute utility statistics is too large to display ({df_size_mb:.2f} MB).")
+
