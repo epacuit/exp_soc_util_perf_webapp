@@ -19,6 +19,9 @@ st.set_page_config(
     page_icon="📊",
 )
 
+def calculate_mcse(vm1_est_std_errors, vm2_est_std_errors, n):
+    return np.sqrt(np.sum(np.square(vm1_est_std_errors + vm2_est_std_errors)) / n**2)
+
 condorcet_vms = [
     knockout,
     condorcet_plurality,
@@ -297,7 +300,9 @@ if not st.session_state.use_uncertainty:
 
 with st.sidebar:
 
-    vis_type = st.radio('', ["Show all options", "Average over all options",  "Average over all options except..."], key=None, disabled=False, label_visibility="collapsed")
+    vis_type = st.radio('Visualization Type', 
+                    ["Average over all options",  "Average over all options except..."], 
+                    label_visibility="collapsed")
     avg_all = vis_type == "Average over all options"
     show_all_options = vis_type == "Show all options"
     if vis_type == "Average over all options except...":
@@ -584,7 +589,7 @@ else:
                     )
 
 
-                st.altair_chart(combined_chart ,  use_container_width=False)
+                st.altair_chart(combined_chart, use_container_width=False)
             else: 
                 combined_chart = (bars_avg).configure_axis(
                         labelLimit=500  # Increase label limit to allow wider labels
@@ -592,7 +597,8 @@ else:
                         labelFontSize=16  # Set label font size
                     )
 
-                st.altair_chart(combined_chart,  use_container_width=False)
+                st.altair_chart(combined_chart, use_container_width=False)
+
 
         else: 
             if only_uncertainty or uncertainty_plus_no_uncertainty:

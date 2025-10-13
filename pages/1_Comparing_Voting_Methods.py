@@ -264,7 +264,9 @@ if not st.session_state.use_uncertainty:
 
 with st.sidebar:
 
-    vis_type = st.radio('', ["Average over all options",  "Average over all options except..."], key=None, disabled=False, label_visibility="collapsed")
+    vis_type = st.radio('Visualization Type', 
+                    ["Average over all options",  "Average over all options except..."], 
+                    label_visibility="collapsed")
     avg_all = vis_type == "Average over all options"
     show_all_options = vis_type == "Show all options"
     if vis_type == "Average over all options except...":
@@ -520,7 +522,7 @@ else:
     table_data = {
         "Method 2": [],
         "Difference": [],
-        "MCSE": [],
+        "MCSE of Difference": [],
         "Significant": [],
         "Better Method": [],
     }
@@ -533,7 +535,7 @@ else:
         
         table_data["Method 2"].append(vm2)
         table_data["Difference"].append(diff)
-        table_data["MCSE"].append(mcse)
+        table_data["MCSE of Difference"].append(mcse)
         # Store as string instead of boolean to avoid checkbox rendering
         table_data["Significant"].append("✔" if is_significant else "✖")
         table_data["Better Method"].append(vm1 if diff > 0 else vm2)
@@ -563,12 +565,12 @@ else:
     styled_df = df_table.style.apply(style_table, axis=1)
     styled_df = styled_df.format({
         "Difference": "{:+.7f}",
-        "MCSE": "{:.7f}",
+        "MCSE of Difference": "{:.7f}",
         # No need to format "Significant" since it's already a string
     })
 
     # Apply text alignment using set_properties
-    styled_df = styled_df.set_properties(**{'text-align': 'center'}, subset=['Difference', 'MCSE', 'Significant'])
+    styled_df = styled_df.set_properties(**{'text-align': 'center'}, subset=['Difference', 'MCSE of Difference', 'Significant'])
     styled_df = styled_df.set_properties(**{'text-align': 'left'}, subset=['Method 2', 'Better Method'])
 
     # Also set table styles for headers and widths
@@ -601,7 +603,7 @@ else:
     st.write("🟢 **Green** = Method 1 performs better | 🔴 **Red** = Method 2 performs better | **Darker shade** = Statistically significant")
 
     # Display with increased height
-    st.dataframe(styled_df, hide_index=True, use_container_width=True, height=500)
+    st.dataframe(styled_df, hide_index=True, width='stretch', height=500)
 
     # Optional: Summary statistics
     if len(df_table) > 0:
