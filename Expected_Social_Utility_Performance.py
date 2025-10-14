@@ -576,7 +576,7 @@ else:
                     .mark_bar()
                         .encode(
                             alt.Y('vm:N', sort=vm_sort_order, title=''),
-                            alt.X('exp_soc_util_perf:Q', title=' ', scale=alt.Scale(domain=[min_x_val, 1])),
+                            alt.X('exp_soc_util_perf:Q', title='Average Expected Social Utility Performance', scale=alt.Scale(domain=[min_x_val, 1])),
                             color=alt.Color('exp_soc_util_perf:Q', scale=alt.Scale(scheme='redyellowgreen', domain=[0.3, 1]), legend=None),
                             tooltip=[alt.Tooltip('vm:N', title="Voting Method"),
                                     alt.Tooltip('exp_soc_util_perf:Q', format=".7f", title="Mean ESUP"),
@@ -677,7 +677,7 @@ else:
             # Create the bars
             bars = alt.Chart(filtered_df).mark_bar().encode(
                 alt.Y('vm:N', sort=vm_sort_order, title=''),
-                alt.X('exp_soc_util_perf:Q', title=' ', scale=alt.Scale(domain=[min_x_val, 1])),
+                alt.X('exp_soc_util_perf:Q', title='Expected Social Utility Performance', scale=alt.Scale(domain=[min_x_val, 1])),
                 tooltip=[alt.Tooltip('vm:N', title="Voting Method"),
                         alt.Tooltip('exp_soc_util_perf:Q', format=".7f", title="ESUP"),
                         alt.Tooltip('est_std_error:Q', format=".7f", title="Std Error"),
